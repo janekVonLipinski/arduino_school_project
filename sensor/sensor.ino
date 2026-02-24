@@ -21,8 +21,6 @@ const int sensorMax = 1024;  // sensor maximum for flame sensor
 void setup() {
   Serial.begin(9600);  //UART   setup, baudrate = 9600bps
 
-  calibrate();
-
   pinMode(green, OUTPUT);
   pinMode(yellow, OUTPUT);
   pinMode(red, OUTPUT);
@@ -30,20 +28,19 @@ void setup() {
   pinMode(A0, INPUT);
 
   dht.begin();
+  Serial.println("Waiting for gas sensor to heat up");
+  delay(60000);
 }
 
 
 void loop() {
-  //int co = readCoValue();
-  //evalualteCoForTrafficLight(co);
+  Serial.println("Humidity: ");
+  float h = dht.readHumidity();
+  Serial.println(h);
 
-  //Serial.println("Humidity: ");
-  //float h = dht.readHumidity();
-  //Serial.println(h);
-
-  //Serial.println("Temperature: ");
-  //float t = dht.readTemperature();
-  //Serial.println(t);
+  Serial.println("Temperature: ");
+  float t = dht.readTemperature();
+  Serial.println(t);
 
   //readFlameSensor();
 
@@ -51,61 +48,78 @@ void loop() {
   Serial.println("Analog value");
   Serial.println(analog_value);
 
-  delay(100);
+  int avg = (analog_value); //+ analog_value_2) / 2; 
+
+  //evalualteGasConcentrationForTrafficLight(avg);
+
+  producer_code();
+
+  delay(2000);
+}
+
+void producer_code() {
+      float sensor_volt;
+    float sensorValue;
+    float RS_air;
+    float R0;
+    float RS_gas;
+    float ratio;
+    
+    sensorValue = analogRead(A0);
+    sensor_volt = sensorValue/1024*5.0;
+    
+    for(int x = 0 ; x < 100 ; x++)
+    {
+        sensorValue = sensorValue + analogRead(A0);
+    }
+    sensorValue = sensorValue/100.0;
+
+    sensor_volt = sensorValue/1024*5.0;
+    RS_air = (5.0-sensor_volt)/sensor_volt;
+    R0 = RS_air/9.8;
+    RS_gas = (5.0-sensor_volt)/sensor_volt;
+    ratio = RS_gas/R0;
+
+    Serial.print("R0 = ");
+    Serial.println(R0);
+    
+    Serial.print("sensor_volt = ");
+    Serial.println(sensor_volt);
+    Serial.print("RS_ratio = ");
+    Serial.println(RS_gas);
+    Serial.print("Rs/R0 = ");
+    Serial.println(ratio);
+
+    Serial.print("\n\n");
 }
 
 
-float calibrate() {
-  Serial.print("Calibrating...");
-  Ro = MQCalibration(MQ_PIN);  
-  Serial.print("Calibration   is done...");
-  Serial.print("Ro=");
-  Serial.print(Ro);
-  Serial.print("kohm");
-  Serial.print("");
-  return Ro;
-}
+void evalualteGasConcentrationForTrafficLight(int analog_value) {
+  int schwelle1 = 900;
+  int schwelle2 = 1200;
+  
+  if (analog_value < 0) {
+    return;
+  }
 
-int readCoValue() {
-  int co = MQGetGasPercentage(MQRead(MQ_PIN) / Ro, GAS_CO);
-  Serial.print("LPG:");
-  Serial.print(MQGetGasPercentage(MQRead(MQ_PIN) / Ro, GAS_LPG));
-  Serial.print("ppm");
-  Serial.println("    ");
-  Serial.print("CO:");
-  Serial.print(co);  
-  Serial.print("ppm");
-  Serial.println("    ");
-  Serial.print("SMOKE:");
-  Serial.print(MQGetGasPercentage(MQRead(MQ_PIN) / Ro, GAS_SMOKE));
-  Serial.println("ppm");
-  return co;
-}
-
-void evalualteCoForTrafficLight(int co) {
-  if (co < 0) {
+  if (analog_value <= schwelle1) {
     digitalWrite(green, HIGH);
     digitalWrite(yellow, LOW);
     digitalWrite(red, LOW);
+    return;
   }
 
-  if (co >= co_good) {
-    digitalWrite(green, HIGH);
-    digitalWrite(yellow, LOW);
-    digitalWrite(red, LOW);
-  }
-
-  if (co >= co_ok) {
+  if (analog_value <= schwelle2) {
     digitalWrite(green, LOW);
     digitalWrite(yellow, HIGH);
     digitalWrite(red, LOW);
+    return;
   }
 
-  if (co >= co_bad) {
-    digitalWrite(green, LOW);
-    digitalWrite(yellow, LOW);
-    digitalWrite(red, HIGH);
-  }
+  digitalWrite(green, LOW);
+  digitalWrite(yellow, LOW);
+  digitalWrite(red, HIGH);
+  
 }
 
 void readFlameSensor() {
