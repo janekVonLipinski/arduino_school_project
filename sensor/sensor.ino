@@ -64,42 +64,61 @@ void setup() {
 }
 
 void loop() {
-  // Forward any data from ESP to Serial Monitor
   if (Serial1.available()) {
     String data = "";
+
+    // Read incoming data
     while (Serial1.available()) {
       char c = Serial1.read();
       data += c;
+      delay(2);
     }
 
-    Serial.print(data); // Print incoming ESP data
+    Serial.print(data); 
 
-    // Detect a connection request (usually "+IPD" message)
     int ipdIndex = data.indexOf("+IPD,");
     if (ipdIndex != -1) {
-      // Extract connection ID
-      int idIndex = data.indexOf(',', ipdIndex + 5);
-      String connID = data.substring(ipdIndex + 5, idIndex);
 
-      // Send HTTP response
-      String httpResponse = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
-      httpResponse += "<html><body><h1>Hello from ESP-01!</h1></body></html>";
+      int firstComma = data.indexOf(',', ipdIndex + 5);
+      String connID = data.substring(ipdIndex + 5, firstComma);
 
-      String cmd = "AT+CIPSEND=" + connID + "," + String(httpResponse.length());
-      sendAT(cmd, 1000);         // Tell ESP how many bytes we will send
-      sendAT(httpResponse, 1000); // Send the actual HTTP response
+      Serial.println("ConnID: " + connID); 
 
-      // Close the connection
-      sendAT("AT+CIPCLOSE=" + connID, 1000);
+      String httpResponse =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/html\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+        "<html><body><h1>Hello from ESP-01!</h1></body></html>";
+
+      Serial1.print("AT+CIPSEND=");
+      Serial1.print(connID);
+      Serial1.print(",");
+      Serial1.println(httpResponse.length());
+
+      unsigned long timeout = millis();
+      while (!Serial1.find(">")) {
+        if (millis() - timeout > 2000) {
+          Serial.println("ERROR: No > prompt");
+          return;
+        }
+      }
+
+      Serial1.print(httpResponse);
+
+      timeout = millis();
+      while (!Serial1.find("SEND OK")) {
+        if (millis() - timeout > 2000) {
+          Serial.println("WARNING: No SEND OK");
+          break;
+        }
+      }
+
+      Serial1.print("AT+CIPCLOSE=");
+      Serial1.println(connID);
     }
   }
-
-  // Forward any Serial Monitor input to ESP (optional)
-  if (Serial.available()) {
-    Serial1.write(Serial.read());
-  }
 }
-
 // Helper function to send AT commands and print response
 void sendAT(String cmd, int timeout) {
   Serial1.println(cmd);
