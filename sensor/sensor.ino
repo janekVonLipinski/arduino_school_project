@@ -1,4 +1,3 @@
-#include <SPI.h>
 #include <WiFi101.h>
 #include <SoftwareSerial.h>
 
@@ -6,46 +5,48 @@ WiFiServer server(80);
 SoftwareSerial ESP8266(18, 19);  // RX, TX
 
 int gas_pin = A0;
+int green = 2;
+int yellow = 3;
+int red = 4;
 
 int status = WL_IDLE_STATUS;
 
-unsigned char check_connection = 0;
-
-int array_length = 64;
-int myData[64];
+int array_length = 1024;
+int myData[1024];
 
 unsigned long previousMeasureMenttime = millis();
 unsigned long previousServerTime = millis();
 
-long gasReadingdurationInMillis = 10000;
+long gasReadingdurationInMillis = 1000;
 int serverDurationInMillis = 100;
 
+unsigned char check_connection = 0;
 int counter = 0;
-
+int valuesMeasured = 0;
+int sumOfGas = 0;
+int gas = 0;
 
 void setup() {
 
   pinMode(gas_pin, INPUT);
+  pinMode(green, INPUT);
+  pinMode(yellow, INPUT);
+  pinMode(red, INPUT);
 
-  Serial.begin(115200);   // USB -> PC
-  Serial1.begin(115200);  // Mega ↔ ESP-01 (TX1=18, RX1=19)
+  Serial.begin(115200);
+  Serial1.begin(115200);
 
   delay(1000);
   Serial.println("Initializing ESP-01 HTTP Server...");
 
-  // Test ESP-01
   sendAT("AT", 1000);
 
-  // Set WiFi mode to Station+AP (1=Station, 2=AP, 3=Both)
   sendAT("AT+CWMODE=3", 1000);
 
-  // Connect to WiFi (replace with your SSID & password)
-  sendAT("AT+CWJAP=\"carrambahotspotayayaymuyinternet\",\"tollesfeineshotspotpasswort\"", 10000);
+  sendAT("AT+CWJAP=\"myHotspot\",\"myPassword\"", 10000);
 
-  // Enable multiple connections
   sendAT("AT+CIPMUX=1", 1000);
 
-  // Start TCP server on port 80
   sendAT("AT+CIPSERVER=1,80", 1000);
   sendAT("AT+CIFSR", 1000);
 
@@ -67,14 +68,22 @@ void loop() {
     previousMeasureMenttime = currentTime;
 
     measure_gas();
+    handle_mr_nolting_gedenk_ampel();
   }
 }
 
-void measure_gas() {
-  int gas = analogRead(gas_pin);
 
-  if (counter < array_length) {
-    myData[counter++] = gas;
+
+void measure_gas() {
+  gas = analogRead(gas_pin);
+  sumOfGas += gas;
+  valuesMeasured++;
+
+  if (valuesMeasured == 10) {
+    sumOfGas = sumOfGas / 10;
+    myData[counter++] = sumOfGas;
+    valuesMeasured = 0;
+    sumOfGas = 0;
   }
 }
 
@@ -154,4 +163,26 @@ String convertArrayToJson() {
 
   res += "}";
   return res;
+}
+
+void handle_mr_nolting_gedenk_ampel() {
+  
+  if (gas <= 620) {
+    
+    digitalWrite(green, HIGH);
+    digitalWrite(yellow, LOW);
+    digitalWrite(red, LOW);
+  }
+
+  if (gas > 620) {
+    digitalWrite(yellow, HIGH);
+    digitalWrite(red, LOW);
+    digitalWrite(green, LOW);
+  }
+
+  if (gas > 720) {
+    digitalWrite(red, HIGH);
+    digitalWrite(yellow, LOW);
+    digitalWrite(green, LOW);
+  }
 }
